@@ -36,3 +36,25 @@ Next steps
 - Add more hooks from the upstream project
 - Add integration tests and better CLI options (e.g., pattern matching, recursive flags)
 - Consider producing separate binaries for each hook to match pre-commit's expectations
+
+macOS signing for CI
+
+If you want the GitHub Actions workflow to codesign macOS bundles, add two repository secrets:
+
+- `MAC_SIGNING_P12` — a base64-encoded `.p12` certificate (single-line, no newlines). Create it locally with:
+
+```bash
+base64 /path/to/your/certificate.p12 | tr -d '\n'
+```
+
+- `MAC_SIGNING_PASSWORD` — the password for the `.p12` file.
+
+Behavior in CI:
+
+- The workflow will only attempt to sign on macOS runners. The signing step is conditional and will be skipped (successfully) if either secret is missing. This means builds will still produce unsigned artifacts when you haven't configured signing.
+- When both secrets are present, the workflow decodes the P12, imports it into a temporary keychain, attempts to codesign `.app` bundles under `target/release/bundle/macos/`, verifies them, and cleans up the temporary keychain.
+
+Notes:
+
+- Notarization is not performed by default. If you need notarization, you'll need to provide Apple notarization credentials and add corresponding steps to the workflow.
+- Keep your P12 and password secure — add them only to GitHub repository (or organization) secrets and do not commit them to source control.

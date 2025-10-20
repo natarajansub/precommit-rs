@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand, ValueEnum};
-use std::{path::PathBuf, fs, os::unix::fs::PermissionsExt};
-use anyhow::{anyhow, Result};
+use std::path::PathBuf;
+use anyhow::anyhow;
 
 use precommit_rs::RunContext;
 mod hooks;
@@ -143,9 +143,13 @@ fn main() -> anyhow::Result<()> {
                         .replace("{{hook_name}}", &name)
                         .replace("{{description}}", &description);
                     
-                    let script_path = hook_dir.join(format!("{}.py", name));
-                    std::fs::write(&script_path, template)?;
-                    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))?;
+                        let script_path = hook_dir.join(format!("{}.py", name));
+                        std::fs::write(&script_path, template)?;
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::fs::PermissionsExt;
+                            std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))?;
+                        }
                 }
                 HookLanguage::Shell => {
                     let template = std::fs::read_to_string(template_dir.join("shell_hook.template"))?
@@ -154,7 +158,11 @@ fn main() -> anyhow::Result<()> {
                     
                     let script_path = hook_dir.join(&name);
                     std::fs::write(&script_path, template)?;
-                    std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))?;
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755))?;
+                    }
                 }
             }
 
