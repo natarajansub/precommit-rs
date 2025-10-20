@@ -151,21 +151,42 @@ jobs:
           ls -la artifacts/macos || true
           ls -la artifacts/windows || true
 
-      - name: Download any changelog artifacts
+      # Try to download changelog from any platform that might have created it
+      - name: Download Ubuntu changelog
+        continue-on-error: true
         uses: actions/download-artifact@v4
         with:
           name: precommit-changelog-ubuntu-latest
-          path: artifacts/changelog || true
+          path: artifacts/changelog/ubuntu
+
+      - name: Download macOS changelog
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: precommit-changelog-macos-latest
+          path: artifacts/changelog/macos
+
+      - name: Download Windows changelog
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: precommit-changelog-windows-latest
+          path: artifacts/changelog/windows
 
       - name: Prepare release body
         shell: bash
         run: |
           echo "Preparing release notes..."
-          if [ -f artifacts/changelog/PRECOMMIT_CHANGELOG.md ]; then
-            cat artifacts/changelog/PRECOMMIT_CHANGELOG.md > release_body.md
-          else
-            echo "Auto-built release for precommit-rs (run $GITHUB_RUN_NUMBER)" > release_body.md
-          fi
+          # Look for changelog in any platform's artifacts
+          for platform in ubuntu macos windows; do
+            if [ -f "artifacts/changelog/$platform/PRECOMMIT_CHANGELOG.md" ]; then
+              echo "Found changelog in $platform artifacts"
+              cat "artifacts/changelog/$platform/PRECOMMIT_CHANGELOG.md" > release_body.md
+              exit 0
+            fi
+          done
+          echo "No changelog found in any platform's artifacts"
+          echo "Auto-built release for precommit-rs (run $GITHUB_RUN_NUMBER)" > release_body.md
 
       - name: Create GitHub release and upload assets
         uses: softprops/action-gh-release@v1
