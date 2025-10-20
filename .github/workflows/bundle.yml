@@ -61,6 +61,7 @@ jobs:
           ls -la /usr/local/bin/appimagetool || true
 
       - name: Run cargo-bundle (best-effort)
+        shell: bash
         run: |
           set -o pipefail || true
           cargo bundle --release 2>&1 | tee bundle.log || true
@@ -184,6 +185,7 @@ jobs:
         env:
           MAC_SIGNING_P12: ${{ secrets.MAC_SIGNING_P12 }}
           MAC_SIGNING_PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
+        shell: bash
         run: |
           set -euo pipefail
 
