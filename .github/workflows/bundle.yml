@@ -180,6 +180,60 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Optional macOS signing (if enabled)
-        if: ${{ secrets.MAC_SIGNING_P12 && secrets.MAC_SIGNING_PASSWORD && runner.os == 'macOS' }}
+        if: runner.os == 'macOS'
+        env:
+          MAC_SIGNING_P12: ${{ secrets.MAC_SIGNING_P12 }}
+          MAC_SIGNING_PASSWORD: ${{ secrets.MAC_SIGNING_PASSWORD }}
         run: |
-          echo "macOS signing not implemented in this workflow placeholder. Add steps to import certificate and codesign here."
+          set -euo pipefail
+
+          if [ -z "$MAC_SIGNING_P12" ] || [ -z "$MAC_SIGNING_PASSWORD" ]; then
+            echo "Skipping macOS signing because MAC_SIGNING_P12 or MAC_SIGNING_PASSWORD is not set."
+            exit 0
+          fi
+
+          echo "Decoding P12..."
+          echo "$MAC_SIGNING_P12" | base64 --decode > /tmp/mac_signing.p12
+
+          KEYCHAIN="build-signing-keychain"
+          KEYCHAIN_PWD="temporary-password"
+
+          echo "Creating temporary keychain $KEYCHAIN"
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
+          security set-keychain-settings -lut 3600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN"
+
+          echo "Importing P12 into keychain"
+          security import /tmp/mac_signing.p12 -k "$KEYCHAIN" -P "$MAC_SIGNING_PASSWORD" -T /usr/bin/codesign || true
+
+          # Find identity
+          IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | awk '/\"/ {print $2; exit}' | tr -d '"') || true
+          if [ -z "$IDENTITY" ]; then
+            echo "No signing identity found in the imported P12. Cleaning up and exiting."
+            security delete-keychain "$KEYCHAIN" || true
+            exit 0
+          fi
+
+          echo "Found identity: $IDENTITY"
+
+          # Codesign any .app produced by the bundle
+          APP_DIRS=(target/release/bundle/macos/*.app target/release/bundle/macos/*/*.app)
+          signed_any=false
+          for pattern in "${APP_DIRS[@]}"; do
+            for app in $pattern; do
+              if [ -d "$app" ]; then
+                echo "Codesigning $app"
+                /usr/bin/codesign --deep --force --verbose --options runtime -s "$IDENTITY" "$app" || true
+                /usr/bin/codesign --verify --deep --strict --verbose=2 "$app" || true
+                signed_any=true
+              fi
+            done
+          done
+
+          if [ "$signed_any" = false ]; then
+            echo "No .app bundles found to sign; skipping codesign step."
+          fi
+
+          echo "Cleaning up keychain"
+          security delete-keychain "$KEYCHAIN" || true
+          rm -f /tmp/mac_signing.p12
