@@ -1,0 +1,5 @@
+# Add this to your .pre-commit.yaml to use this hook:
+  - id: check-size
+    files: '**/*'  # Adjust pattern to match files you want to check
+    enabled: true
+    command: /Users/Nat/Work/precommit-rs/check-size/check-size

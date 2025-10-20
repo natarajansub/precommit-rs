@@ -1,0 +1,63 @@
+#!/bin/bash
+set -euo pipefail
+
+# check-size
+# Check file sizes and warn if over limit
+
+debug=false
+dry_run=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --debug)
+            debug=true
+            shift
+            ;;
+        --dry-run)
+            dry_run=true
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+files=("$@")
+
+if [ "$debug" = true ]; then
+    echo "Files to process: ${files[@]}" >&2
+fi
+
+success=true
+
+for file in "${files[@]}"; do
+    if [ ! -f "$file" ]; then
+        echo "File not found: $file" >&2
+        success=false
+        continue
+    fi
+    
+    if [ "$debug" = true ]; then
+        echo "Processing $file" >&2
+    fi
+    
+    if [ "$dry_run" = true ]; then
+        echo "Would process $file"
+        continue
+    fi
+    
+    # TODO: Add your hook logic here
+    # Example:
+    # if ! some_command "$file"; then
+    #     echo "Error processing $file" >&2
+    #     success=false
+    # fi
+done
+
+if [ "$success" = true ]; then
+    exit 0
+else
+    exit 1
+fi

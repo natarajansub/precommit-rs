@@ -1,0 +1,62 @@
+use anyhow::{anyhow, Result};
+use clap::Parser;
+use std::path::PathBuf;
+
+/// {{hook_name}} - {{description}}
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// Files to process
+    files: Vec<PathBuf>,
+
+    /// Enable debug output
+    #[arg(long)]
+    debug: bool,
+
+    /// Show what would be done without making changes
+    #[arg(long)]
+    dry_run: bool,
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+    
+    if args.debug {
+        eprintln!("Processing files: {:?}", args.files);
+    }
+    
+    let mut success = true;
+    for file in args.files {
+        if !file.exists() {
+            eprintln!("File not found: {}", file.display());
+            success = false;
+            continue;
+        }
+        
+        if args.debug {
+            eprintln!("Processing {}", file.display());
+        }
+        
+        if args.dry_run {
+            println!("Would process {}", file.display());
+            continue;
+        }
+        
+        // TODO: Add your hook logic here
+        // Example:
+        match std::fs::read_to_string(&file) {
+            Ok(content) => {
+                // Process content
+                // write_changes(&file, &new_content)?;
+            }
+            Err(e) => {
+                eprintln!("Error reading {}: {}", file.display(), e);
+                success = false;
+            }
+        }
+    }
+    
+    std::process::exit(if success { 0 } else { 1 });
+}
+
+// Add your hook-specific functions here

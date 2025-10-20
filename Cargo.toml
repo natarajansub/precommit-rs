@@ -1,0 +1,42 @@
+[package]
+name = "precommit-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+walkdir = "2"
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+anyhow = "1.0"
+tempfile = "3"
+glob = "0.3"
+chrono = "0.4"
+
+
+[package.metadata.bundle]
+# Common metadata used by cargo-bundle (https://github.com/burtonageo/cargo-bundle)
+# See the cargo-bundle docs for full details and additional options per platform.
+identifier = "com.example.precommit-rs"
+resources = ["assets/"]
+icon = ["assets/icon.png"]
+
+[package.metadata.bundle.macos]
+package_type = "dmg"
+sign = false
+macos_entitlements = ""
+license = "LICENSE"
+name = "precommit-rs"
+
+[package.metadata.bundle.linux]
+package_type = "appimage"
+desktop_file = { name = "precommit-rs", exec = "precommit-rs", icon = "precommit-rs" }
+maintainer = "Your Name <you@example.com>"
+description = "A collection of pre-commit hooks implemented in Rust."
+
+[package.metadata.bundle.windows]
+package_type = "nsis"
+installer_name = "precommit-rs-installer"
+publisher = "Your Name"
+description = "A collection of pre-commit hooks implemented in Rust."
