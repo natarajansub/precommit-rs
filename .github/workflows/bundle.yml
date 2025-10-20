@@ -1,0 +1,185 @@
+name: Build & Bundle
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-bundle:
+    name: Build & Bundle on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build (release)
+        run: cargo build --release
+
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle --locked --force
+
+      - name: Install platform prerequisites (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install -y nsis
+
+      - name: Ensure NSIS is available (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          where makensis || echo "makensis not found"
+
+      - name: Install platform prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget xz-utils libfuse2 ca-certificates
+          # Download appimagetool
+          wget -O appimagetool.tar.xz https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool.tar.xz
+          mv appimagetool.tar.xz /usr/local/bin/appimagetool
+          ls -la /usr/local/bin/appimagetool || true
+
+      - name: Run cargo-bundle (best-effort)
+        run: |
+          set -o pipefail || true
+          cargo bundle --release 2>&1 | tee bundle.log || true
+
+      - name: Attempt to build AppImage from bundle (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          if [ -d target/release/bundle/linux ]; then
+            /usr/local/bin/appimagetool target/release/bundle/linux || true
+          else
+            echo "No linux bundle dir found"
+          fi
+
+      - name: Capture presence of changelog
+        run: |
+          if [ -f PRECOMMIT_CHANGELOG.md ]; then echo "changelog_present=true" >> $GITHUB_OUTPUT; else echo "changelog_present=false" >> $GITHUB_OUTPUT; fi
+        id: changelog_check
+
+      - name: List bundle output
+        run: |
+          echo "-- target/release --"
+          ls -la target/release || true
+          echo "-- target/release/bundle --"
+          ls -la target/release/bundle || true
+          echo "-- dist --"
+          ls -la dist || true
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: precommit-rs-bundles-${{ matrix.os }}
+          path: |
+            target/release/bundle
+            dist
+            target/release/*.dmg
+            target/release/*.AppImage
+            target/release/*.exe
+            target/release/*.msi
+            target/release/*.nsis
+            target/release/*.zip
+            bundle.log
+
+      - name: Upload PRECOMMIT_CHANGELOG (if present)
+        if: ${{ steps.changelog_check.outputs.changelog_present == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: precommit-changelog-${{ matrix.os }}
+          path: PRECOMMIT_CHANGELOG.md
+
+  create-release:
+    name: Create GitHub Release and attach bundles
+    needs: build-and-bundle
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Linux bundle artifact (if present)
+        uses: actions/download-artifact@v4
+        with:
+          name: precommit-rs-bundles-ubuntu-latest
+          path: artifacts/ubuntu
+
+      - name: Download macOS bundle artifact (if present)
+        uses: actions/download-artifact@v4
+        with:
+          name: precommit-rs-bundles-macos-latest
+          path: artifacts/macos
+
+      - name: Download Windows bundle artifact (if present)
+        uses: actions/download-artifact@v4
+        with:
+          name: precommit-rs-bundles-windows-latest
+          path: artifacts/windows
+
+      - name: List downloaded artifacts
+        run: |
+          echo "Artifacts:"
+          ls -la artifacts || true
+          ls -la artifacts/ubuntu || true
+          ls -la artifacts/macos || true
+          ls -la artifacts/windows || true
+
+      - name: Download any changelog artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: precommit-changelog-ubuntu-latest
+          path: artifacts/changelog || true
+
+      - name: Prepare release body
+        run: |
+          echo "Preparing release notes..."
+          if [ -f artifacts/changelog/PRECOMMIT_CHANGELOG.md ]; then
+            cat artifacts/changelog/PRECOMMIT_CHANGELOG.md > release_body.md
+          else
+            echo "Auto-built release for precommit-rs (run $GITHUB_RUN_NUMBER)" > release_body.md
+          fi
+
+      - name: Create GitHub release and upload assets
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: precommit-rs-${{ github.run_number }}
+          name: precommit-rs ${{ github.run_number }}
+          body_path: release_body.md
+          files: |
+            artifacts/**
+            dist/**
+            target/release/bundle/**
+            target/release/*.dmg
+            target/release/*.AppImage
+            target/release/*.exe
+            target/release/*.msi
+            target/release/*.nsis
+            target/release/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Optional macOS signing (if enabled)
+        if: ${{ secrets.MAC_SIGNING_P12 && secrets.MAC_SIGNING_PASSWORD && runner.os == 'macOS' }}
+        run: |
+          echo "macOS signing not implemented in this workflow placeholder. Add steps to import certificate and codesign here."
