@@ -202,51 +202,119 @@ jobs:
             local dir="$1"
             local pattern="$2"
             local dest_prefix="$3"
+            if [ ! -d "$dir" ]; then
+              echo "Skipping $dir (not found)"
+              return
+            fi
             echo "Checking $dir for $pattern"
             find "$dir" -type f -name "$pattern" -print0 | while IFS= read -r -d '' file; do
               echo "Found: $file"
-              # Get relative path from bundle directory
-              local rel_path=${file#target/release/bundle/}
-              # Create destination directory
-              mkdir -p "release-assets/$(dirname "$dest_prefix$rel_path")"
-              # Copy file
+              local rel_path=${file#"$dir"/}
+              if [ "$rel_path" = "$file" ]; then
+                rel_path=$(basename "$file")
+              fi
+              mkdir -p "release-assets/$dest_prefix$(dirname "$rel_path")"
               cp "$file" "release-assets/$dest_prefix$rel_path"
             done
           }
-          
-          # Windows artifacts
-          if [ -d "target/release/bundle/windows" ]; then
-            collect_artifacts "target/release/bundle/windows" "*.exe" "windows/"
-            collect_artifacts "target/release/bundle/windows" "*.msi" "windows/"
-            collect_artifacts "target/release/bundle/windows" "*.dll" "windows/"
-          fi
-          
-          # macOS artifacts
-          if [ -d "target/release/bundle/macos" ]; then
-            # For .app bundles, we need to preserve the bundle structure
-            find "target/release/bundle/macos" -type d -name "*.app" -print0 | while IFS= read -r -d '' bundle; do
-              echo "Found app bundle: $bundle"
-              rel_path=${bundle#target/release/bundle/}
-              mkdir -p "release-assets/$rel_path"
-              cp -R "$bundle"/* "release-assets/$rel_path/"
-            done
-            collect_artifacts "target/release/bundle/macos" "*.dmg" "macos/"
-          fi
-          
-          # Linux artifacts
-          if [ -d "target/release/bundle/linux" ]; then
-            collect_artifacts "target/release/bundle/linux" "*.AppImage" "linux/"
-            collect_artifacts "target/release/bundle/linux" "*.deb" "linux/"
-            collect_artifacts "target/release/bundle/linux" "*.rpm" "linux/"
-          fi
-          
-          # Also collect any top-level artifacts
-          for ext in dmg AppImage exe msi deb rpm; do
-            if ls target/release/*."$ext" 1> /dev/null 2>&1; then
-              echo "Found top-level .$ext files"
-              mkdir -p "release-assets/bin"
-              cp target/release/*."$ext" release-assets/bin/
+
+          copy_app_bundles() {
+            local dir="$1"
+            local dest_prefix="$2"
+            if [ ! -d "$dir" ]; then
+              echo "Skipping $dir for app bundles (not found)"
+              return
             fi
+            echo "Searching $dir for .app bundles"
+            find "$dir" -type d -name "*.app" -print0 | while IFS= read -r -d '' bundle; do
+              echo "Found app bundle: $bundle"
+              local rel_path=${bundle#"$dir"/}
+              if [ "$rel_path" = "$bundle" ]; then
+                rel_path=$(basename "$bundle")
+              fi
+              local dest="release-assets/$dest_prefix$rel_path"
+              mkdir -p "$(dirname "$dest")"
+              rm -rf "$dest"
+              cp -R "$bundle" "$dest"
+            done
+          }
+
+          collect_top_level() {
+            local dir="$1"
+            local dest="$2"
+            local ext="$3"
+            if [ ! -d "$dir" ]; then
+              return
+            fi
+            if ls "$dir"/*."$ext" 1> /dev/null 2>&1; then
+              echo "Found top-level .$ext files in $dir"
+              mkdir -p "release-assets/$dest"
+              cp "$dir"/*."$ext" "release-assets/$dest/"
+            fi
+          }
+
+          windows_dirs=(
+            "artifacts/windows/target/release/bundle/windows"
+            "target/release/bundle/windows"
+          )
+          for dir in "${windows_dirs[@]}"; do
+            collect_artifacts "$dir" "*.exe" "windows/"
+            collect_artifacts "$dir" "*.msi" "windows/"
+            collect_artifacts "$dir" "*.dll" "windows/"
+          done
+
+          mac_dirs=(
+            "artifacts/macos/target/release/bundle/osx"
+            "target/release/bundle/osx"
+            "artifacts/macos/target/release/bundle/macos"
+            "target/release/bundle/macos"
+          )
+          for dir in "${mac_dirs[@]}"; do
+            copy_app_bundles "$dir" "macos/"
+            collect_artifacts "$dir" "*.dmg" "macos/"
+          done
+
+          linux_dirs_appimage=(
+            "artifacts/ubuntu/target/release/bundle/appimage"
+            "target/release/bundle/appimage"
+            "artifacts/linux/target/release/bundle/appimage"
+          )
+          for dir in "${linux_dirs_appimage[@]}"; do
+            collect_artifacts "$dir" "*.AppImage" "linux/"
+          done
+
+          linux_dirs_deb=(
+            "artifacts/ubuntu/target/release/bundle/deb"
+            "target/release/bundle/deb"
+            "artifacts/linux/target/release/bundle/deb"
+          )
+          for dir in "${linux_dirs_deb[@]}"; do
+            collect_artifacts "$dir" "*.deb" "linux/"
+          done
+
+          linux_dirs_rpm=(
+            "artifacts/ubuntu/target/release/bundle/rpm"
+            "target/release/bundle/rpm"
+            "artifacts/linux/target/release/bundle/rpm"
+          )
+          for dir in "${linux_dirs_rpm[@]}"; do
+            collect_artifacts "$dir" "*.rpm" "linux/"
+          done
+
+          top_level_dirs=(
+            "artifacts/macos/target/release"
+            "artifacts/ubuntu/target/release"
+            "artifacts/windows/target/release"
+            "target/release"
+          )
+          for dir in "${top_level_dirs[@]}"; do
+            collect_top_level "$dir" "bin" "dmg"
+            collect_top_level "$dir" "bin" "AppImage"
+            collect_top_level "$dir" "bin" "exe"
+            collect_top_level "$dir" "bin" "msi"
+            collect_top_level "$dir" "bin" "deb"
+            collect_top_level "$dir" "bin" "rpm"
+            collect_artifacts "$dir" "*.zip" "bin/"
           done
           
           echo "Release assets collected:"
