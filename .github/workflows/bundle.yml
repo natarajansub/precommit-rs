@@ -191,37 +191,66 @@ jobs:
             echo "Auto-built release for precommit-rs (run $GITHUB_RUN_NUMBER)" > release_body.md
           fi
 
-      - name: Verify release assets
+      - name: Collect release assets
         shell: bash
         run: |
-          echo "Files available for release:"
-          for dir in target/release/bundle/*/ ; do
-            if [ -d "$dir" ]; then
-              echo "Contents of $dir:"
-              ls -la "$dir"
+          echo "Searching for release assets..."
+          mkdir -p release-assets
+          
+          # Helper function to copy files with directory structure
+          collect_artifacts() {
+            local dir="$1"
+            local pattern="$2"
+            local dest_prefix="$3"
+            echo "Checking $dir for $pattern"
+            find "$dir" -type f -name "$pattern" -print0 | while IFS= read -r -d '' file; do
+              echo "Found: $file"
+              # Get relative path from bundle directory
+              local rel_path=${file#target/release/bundle/}
+              # Create destination directory
+              mkdir -p "release-assets/$(dirname "$dest_prefix$rel_path")"
+              # Copy file
+              cp "$file" "release-assets/$dest_prefix$rel_path"
+            done
+          }
+          
+          # Windows artifacts
+          if [ -d "target/release/bundle/windows" ]; then
+            collect_artifacts "target/release/bundle/windows" "*.exe" "windows/"
+            collect_artifacts "target/release/bundle/windows" "*.msi" "windows/"
+            collect_artifacts "target/release/bundle/windows" "*.dll" "windows/"
+          fi
+          
+          # macOS artifacts
+          if [ -d "target/release/bundle/macos" ]; then
+            # For .app bundles, we need to preserve the bundle structure
+            find "target/release/bundle/macos" -type d -name "*.app" -print0 | while IFS= read -r -d '' bundle; do
+              echo "Found app bundle: $bundle"
+              rel_path=${bundle#target/release/bundle/}
+              mkdir -p "release-assets/$rel_path"
+              cp -R "$bundle"/* "release-assets/$rel_path/"
+            done
+            collect_artifacts "target/release/bundle/macos" "*.dmg" "macos/"
+          fi
+          
+          # Linux artifacts
+          if [ -d "target/release/bundle/linux" ]; then
+            collect_artifacts "target/release/bundle/linux" "*.AppImage" "linux/"
+            collect_artifacts "target/release/bundle/linux" "*.deb" "linux/"
+            collect_artifacts "target/release/bundle/linux" "*.rpm" "linux/"
+          fi
+          
+          # Also collect any top-level artifacts
+          for ext in dmg AppImage exe msi deb rpm; do
+            if ls target/release/*."$ext" 1> /dev/null 2>&1; then
+              echo "Found top-level .$ext files"
+              mkdir -p "release-assets/bin"
+              cp target/release/*."$ext" release-assets/bin/
             fi
           done
           
-          # Create a directory for collected release assets
-          mkdir -p release-assets
-          
-          # Copy only existing files that match our patterns
-          for pattern in \
-            "target/release/bundle/windows/*.exe" \
-            "target/release/bundle/windows/*.msi" \
-            "target/release/bundle/macos/*.app" \
-            "target/release/bundle/macos/*.dmg" \
-            "target/release/bundle/linux/*.AppImage"; do
-            for f in $pattern; do
-              if [ -f "$f" ]; then
-                echo "Found release asset: $f"
-                cp "$f" release-assets/
-              fi
-            done
-          done
-          
-          echo "Final release assets:"
-          ls -la release-assets/
+          echo "Release assets collected:"
+          find release-assets -type f | sort
 
       - name: Get version from Cargo.toml
         id: get_version
@@ -247,7 +276,8 @@ jobs:
           tag_name: v${{ steps.get_version.outputs.final_version }}
           name: precommit-rs v${{ steps.get_version.outputs.final_version }}
           body_path: release_body.md
-          files: release-assets/*
+          files: |
+            release-assets/**/*
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
