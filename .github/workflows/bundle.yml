@@ -154,42 +154,42 @@ jobs:
           ls -la artifacts/macos || true
           ls -la artifacts/windows || true
 
-      # Try to download changelog from any platform that might have created it
-      - name: Download Ubuntu changelog
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: precommit-changelog-ubuntu-latest
-          path: artifacts/changelog/ubuntu
+      # Download changelogs if they exist
+      - name: List available artifacts
+        id: artifact-list
+        shell: bash
+        run: |
+          echo "Looking for changelog artifacts..."
+          # GitHub CLI is pre-installed on runners
+          artifacts=$(gh api /repos/${{ github.repository }}/actions/artifacts \
+            --jq '.artifacts[].name' || echo "")
+          echo "Available artifacts:"
+          echo "$artifacts"
+          echo "artifacts_list<<EOF" >> $GITHUB_OUTPUT
+          echo "$artifacts" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Download macOS changelog
-        continue-on-error: true
+      - name: Download changelog artifacts
+        if: contains(steps.artifact-list.outputs.artifacts_list, 'precommit-changelog-')
         uses: actions/download-artifact@v4
         with:
-          name: precommit-changelog-macos-latest
-          path: artifacts/changelog/macos
-
-      - name: Download Windows changelog
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          name: precommit-changelog-windows-latest
-          path: artifacts/changelog/windows
+          pattern: precommit-changelog-*
+          path: artifacts/changelog
+          merge-multiple: true
 
       - name: Prepare release body
         shell: bash
         run: |
           echo "Preparing release notes..."
-          # Look for changelog in any platform's artifacts
-          for platform in ubuntu macos windows; do
-            if [ -f "artifacts/changelog/$platform/PRECOMMIT_CHANGELOG.md" ]; then
-              echo "Found changelog in $platform artifacts"
-              cat "artifacts/changelog/$platform/PRECOMMIT_CHANGELOG.md" > release_body.md
-              exit 0
-            fi
-          done
-          echo "No changelog found in any platform's artifacts"
-          echo "Auto-built release for precommit-rs (run $GITHUB_RUN_NUMBER)" > release_body.md
+          if [ -f "artifacts/changelog/PRECOMMIT_CHANGELOG.md" ]; then
+            echo "Found changelog"
+            cat "artifacts/changelog/PRECOMMIT_CHANGELOG.md" > release_body.md
+          else
+            echo "No changelog found"
+            echo "Auto-built release for precommit-rs (run $GITHUB_RUN_NUMBER)" > release_body.md
+          fi
 
       - name: Verify release assets
         shell: bash
@@ -223,11 +223,29 @@ jobs:
           echo "Final release assets:"
           ls -la release-assets/
 
+      - name: Get version from Cargo.toml
+        id: get_version
+        shell: bash
+        run: |
+          # Extract version from Cargo.toml
+          version=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "Version from Cargo.toml: $version"
+          echo "version=$version" >> $GITHUB_OUTPUT
+          
+          # Check if this tag already exists
+          if gh release view "v$version" &>/dev/null; then
+            echo "Release v$version already exists. Adding build number suffix."
+            version="${version}-build.${{ github.run_number }}"
+          fi
+          echo "final_version=$version" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create GitHub release and upload assets
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: precommit-rs-${{ github.run_number }}
-          name: precommit-rs ${{ github.run_number }}
+          tag_name: v${{ steps.get_version.outputs.final_version }}
+          name: precommit-rs v${{ steps.get_version.outputs.final_version }}
           body_path: release_body.md
           files: release-assets/*
           token: ${{ secrets.GITHUB_TOKEN }}
