@@ -191,22 +191,45 @@ jobs:
           echo "No changelog found in any platform's artifacts"
           echo "Auto-built release for precommit-rs (run $GITHUB_RUN_NUMBER)" > release_body.md
 
+      - name: Verify release assets
+        shell: bash
+        run: |
+          echo "Files available for release:"
+          for dir in target/release/bundle/*/ ; do
+            if [ -d "$dir" ]; then
+              echo "Contents of $dir:"
+              ls -la "$dir"
+            fi
+          done
+          
+          # Create a directory for collected release assets
+          mkdir -p release-assets
+          
+          # Copy only existing files that match our patterns
+          for pattern in \
+            "target/release/bundle/windows/*.exe" \
+            "target/release/bundle/windows/*.msi" \
+            "target/release/bundle/macos/*.app" \
+            "target/release/bundle/macos/*.dmg" \
+            "target/release/bundle/linux/*.AppImage"; do
+            for f in $pattern; do
+              if [ -f "$f" ]; then
+                echo "Found release asset: $f"
+                cp "$f" release-assets/
+              fi
+            done
+          done
+          
+          echo "Final release assets:"
+          ls -la release-assets/
+
       - name: Create GitHub release and upload assets
         uses: softprops/action-gh-release@v1
         with:
           tag_name: precommit-rs-${{ github.run_number }}
           name: precommit-rs ${{ github.run_number }}
           body_path: release_body.md
-          files: |
-            artifacts/**
-            dist/**
-            target/release/bundle/**
-            target/release/*.dmg
-            target/release/*.AppImage
-            target/release/*.exe
-            target/release/*.msi
-            target/release/*.nsis
-            target/release/*.zip
+          files: release-assets/*
           token: ${{ secrets.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
