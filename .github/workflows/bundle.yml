@@ -68,7 +68,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail || true
-          cargo bundle --release 2>&1 | tee bundle.log || true
+          for pkg in crates/*; do (cd "$pkg" && cargo bundle --release); done && cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
+
 
       - name: Attempt to build AppImage from bundle (Linux)
         if: runner.os == 'Linux'

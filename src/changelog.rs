@@ -1,8 +1,8 @@
+use anyhow::{Context, Result};
+use chrono::Local;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use anyhow::{Result, Context};
-use chrono::Local;
 
 #[derive(Default, Debug)]
 pub struct ChangelogEntry {
@@ -27,7 +27,8 @@ impl Changelog {
     }
 
     pub fn add_entry(&mut self, hook_id: &str) -> &mut ChangelogEntry {
-        self.entries.entry(hook_id.to_string())
+        self.entries
+            .entry(hook_id.to_string())
             .or_insert_with(|| ChangelogEntry {
                 hook_id: hook_id.to_string(),
                 ..Default::default()
@@ -65,7 +66,7 @@ impl Changelog {
 
         let now = Local::now();
         let date_str = now.format("%Y-%m-%d %H:%M:%S");
-        
+
         let mut content = format!("# Pre-commit Changes {}\n\n", date_str);
 
         for entry in self.entries.values() {
@@ -91,7 +92,9 @@ impl Changelog {
                 content.push('\n');
             }
 
-            let unmodified: Vec<_> = entry.files_checked.iter()
+            let unmodified: Vec<_> = entry
+                .files_checked
+                .iter()
                 .filter(|f| !entry.files_modified.contains(f))
                 .collect();
 
@@ -119,8 +122,7 @@ impl Changelog {
             format!("{}\n---\n\n{}", content, existing)
         };
 
-        fs::write(changelog_path, full_content)
-            .context("Failed to write changelog")?;
+        fs::write(changelog_path, full_content).context("Failed to write changelog")?;
 
         Ok(())
     }

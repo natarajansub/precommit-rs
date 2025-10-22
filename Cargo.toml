@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4.4", features = ["derive", "color"] }
 walkdir = "2"
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
@@ -13,6 +13,14 @@ anyhow = "1.0"
 tempfile = "3"
 glob = "0.3"
 chrono = "0.4"
+clap_complete = "4"
+ignore = "0.4"
+
+[[bin]]
+name = "precommit-rs"
+path = "src/main.rs"
+
+
 
 
 [package.metadata.bundle]
@@ -26,17 +34,34 @@ icon = ["assets/icon.png"]
 package_type = "dmg"
 sign = false
 macos_entitlements = ""
-license = "LICENSE"
+license = "MIT LICENSE"
 name = "precommit-rs"
 
 [package.metadata.bundle.linux]
 package_type = "appimage"
 desktop_file = { name = "precommit-rs", exec = "precommit-rs", icon = "precommit-rs" }
-maintainer = "Your Name <you@example.com>"
+maintainer = "nats<you@example.com>"
 description = "A collection of pre-commit hooks implemented in Rust."
 
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "precommit-rs-installer"
-publisher = "Your Name"
+publisher = "nats"
 description = "A collection of pre-commit hooks implemented in Rust."
+
+[package.metadata.bundle.bin.precommit-rs]
+name = "precommit-rs"
+identifier = "com.example.precommit-rs.precommit-rs"
+
+[package.metadata.bundle.bin.precommit-rs.linux]
+desktop_file = { name = "precommit-rs", exec = "precommit-rs", icon = "precommit-rs" }
+
+[workspace]
+resolver = "2"
+members = [
+    "crates/end-of-file-fixer",
+    "crates/trailing-whitespace",
+    "crates/check-added-large-files",
+    "crates/check-yaml",
+    "crates/pretty-format-json",
+]

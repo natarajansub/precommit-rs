@@ -1,7 +1,7 @@
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
+use std::fs;
 use std::path::PathBuf;
 use tempfile::tempdir;
-use std::fs;
 
 /// Identifies if a hook is a validator only (doesn't modify files, just checks them)
 fn is_validator_hook(hook_name: &str) -> bool {
@@ -9,9 +9,9 @@ fn is_validator_hook(hook_name: &str) -> bool {
 }
 
 /// Test that a hook implementation meets the required contract
-pub fn validate_hook<F>(hook_name: &str, hook_fn: F) -> Result<()> 
-where 
-    F: Fn(&crate::RunContext, Vec<PathBuf>) -> Result<()>
+pub fn validate_hook<F>(hook_name: &str, hook_fn: F) -> Result<()>
+where
+    F: Fn(&crate::RunContext, Vec<PathBuf>) -> Result<()>,
 {
     // Test 1: Basic hook call with no files
     let ctx = crate::RunContext::default();
@@ -21,7 +21,7 @@ where
     let temp_dir = tempdir()?;
     let test_file = temp_dir.path().join("test.txt");
     fs::write(&test_file, "test content\n\n")?;
-    
+
     let ctx = crate::RunContext {
         dry_run: true,
         debug: true,
@@ -32,7 +32,7 @@ where
     let original_content = fs::read_to_string(&test_file)?;
     hook_fn(&ctx, vec![test_file.clone()])?;
     let after_content = fs::read_to_string(&test_file)?;
-    
+
     // Only check for unmodified content if hook is not a validator
     if !is_validator_hook(hook_name) && original_content != after_content {
         return Err(anyhow!("Hook {} modified file in dry-run mode", hook_name));
@@ -75,7 +75,10 @@ where
     // For validator hooks, they should exit(1) on validation failures
     // For fixer hooks, they should exit(1) on making changes
     if !would_fail {
-        return Err(anyhow!("Hook {} did not indicate failure/changes via exit code when expected", hook_name));
+        return Err(anyhow!(
+            "Hook {} did not indicate failure/changes via exit code when expected",
+            hook_name
+        ));
     }
 
     // Test 5: Error handling - non-existent file

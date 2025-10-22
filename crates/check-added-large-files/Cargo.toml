@@ -1,0 +1,28 @@
+[package]
+name = "check-added-large-files"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
+precommit-rs = { path = "../../" }
+
+[package.metadata.bundle]
+identifier = "com.example.precommit-rs.check-added-large-files"
+icon = ["../../assets/icon.png"]
+
+[package.metadata.bundle.linux]
+package_type = "appimage"
+desktop_file = { name = "check-added-large-files", exec = "check-added-large-files", icon = "precommit-rs" }
+
+[package.metadata.bundle.windows]
+package_type = "nsis"
+installer_name = "check-added-large-files-installer"
+publisher = "Your Name"
+description = "Check added files for size limits from precommit-rs."
+
+[package.metadata.bundle.macos]
+package_type = "dmg"
+name = "check-added-large-files"

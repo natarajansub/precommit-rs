@@ -1,0 +1,28 @@
+[package]
+name = "end-of-file-fixer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
+precommit-rs = { path = "../../" }
+
+[package.metadata.bundle]
+identifier = "com.example.precommit-rs.end-of-file-fixer"
+icon = ["../../assets/icon.png"]
+
+[package.metadata.bundle.linux]
+package_type = "appimage"
+desktop_file = { name = "end-of-file-fixer", exec = "end-of-file-fixer", icon = "precommit-rs" }
+
+[package.metadata.bundle.windows]
+package_type = "nsis"
+installer_name = "end-of-file-fixer-installer"
+publisher = "Your Name"
+description = "End-of-file fixer from precommit-rs."
+
+[package.metadata.bundle.macos]
+package_type = "dmg"
+name = "end-of-file-fixer"

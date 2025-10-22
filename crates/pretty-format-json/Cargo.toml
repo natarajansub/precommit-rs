@@ -1,0 +1,28 @@
+[package]
+name = "pretty-format-json"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
+precommit-rs = { path = "../../" }
+
+[package.metadata.bundle]
+identifier = "com.example.precommit-rs.pretty-format-json"
+icon = ["../../assets/icon.png"]
+
+[package.metadata.bundle.linux]
+package_type = "appimage"
+desktop_file = { name = "pretty-format-json", exec = "pretty-format-json", icon = "precommit-rs" }
+
+[package.metadata.bundle.windows]
+package_type = "nsis"
+installer_name = "pretty-format-json-installer"
+publisher = "Your Name"
+description = "Pretty-format JSON files with precommit-rs."
+
+[package.metadata.bundle.macos]
+package_type = "dmg"
+name = "pretty-format-json"

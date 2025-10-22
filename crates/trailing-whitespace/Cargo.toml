@@ -1,0 +1,28 @@
+[package]
+name = "trailing-whitespace"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+clap = { version = "4", features = ["derive"] }
+precommit-rs = { path = "../../" }
+
+[package.metadata.bundle]
+identifier = "com.example.precommit-rs.trailing-whitespace"
+icon = ["../../assets/icon.png"]
+
+[package.metadata.bundle.linux]
+package_type = "appimage"
+desktop_file = { name = "trailing-whitespace", exec = "trailing-whitespace", icon = "precommit-rs" }
+
+[package.metadata.bundle.windows]
+package_type = "nsis"
+installer_name = "trailing-whitespace-installer"
+publisher = "Your Name"
+description = "Trailing whitespace fixer from precommit-rs."
+
+[package.metadata.bundle.macos]
+package_type = "dmg"
+name = "trailing-whitespace"

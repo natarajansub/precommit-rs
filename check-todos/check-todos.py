@@ -25,7 +25,7 @@ def main():
         try:
             # TODO: Add your hook logic here
             # Example:
-            content = path.read_text()
+            #path.read_text()
             if args.debug:
                 print(f"Processing {file_path}", file=sys.stderr)
                 

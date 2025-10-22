@@ -8,11 +8,16 @@ pub fn run(paths: Vec<PathBuf>) -> Result<()> {
 }
 
 pub fn run_with_ctx(ctx: &crate::RunContext, paths: Vec<PathBuf>) -> Result<()> {
-    if ctx.debug { eprintln!("end_of_file: dry_run={}", ctx.dry_run); }
+    if ctx.debug {
+        eprintln!("end_of_file: dry_run={}", ctx.dry_run);
+    }
     let mut any_changes = false;
     for path in paths {
         if path.is_dir() {
-            for entry in walkdir::WalkDir::new(path).into_iter().filter_map(|e| e.ok()) {
+            for entry in walkdir::WalkDir::new(path)
+                .into_iter()
+                .filter_map(|e| e.ok())
+            {
                 let p = entry.path().to_path_buf();
                 if p.is_file() {
                     if fix_file_with_ctx(ctx, &p)? {
@@ -29,7 +34,9 @@ pub fn run_with_ctx(ctx: &crate::RunContext, paths: Vec<PathBuf>) -> Result<()> 
 
     if any_changes {
         if ctx.dry_run {
-            if ctx.debug { eprintln!("dry-run: end_of_file would change files"); }
+            if ctx.debug {
+                eprintln!("dry-run: end_of_file would change files");
+            }
             return Ok(());
         }
         std::process::exit(1);
@@ -40,16 +47,21 @@ pub fn run_with_ctx(ctx: &crate::RunContext, paths: Vec<PathBuf>) -> Result<()> 
 
 fn fix_file_with_ctx(ctx: &crate::RunContext, path: &PathBuf) -> Result<bool> {
     // Record this file in changelog as being checked
-    ctx.changelog.lock().unwrap().record_file_checked("end-of-file-fixer", path);
+    ctx.changelog
+        .lock()
+        .unwrap()
+        .record_file_checked("end-of-file-fixer", path);
 
     let content = match fs::read_to_string(path) {
         Ok(s) => s,
         Err(e) => {
             if e.kind() == std::io::ErrorKind::InvalidData {
-                if ctx.debug { eprintln!("skipping non-utf8 file {}", path.display()); }
+                if ctx.debug {
+                    eprintln!("skipping non-utf8 file {}", path.display());
+                }
                 ctx.changelog.lock().unwrap().record_change(
                     "end-of-file-fixer",
-                    &format!("Skipped non-UTF8 file: {}", path.display())
+                    &format!("Skipped non-UTF8 file: {}", path.display()),
                 );
                 return Ok(false);
             } else {
@@ -62,20 +74,28 @@ fn fix_file_with_ctx(ctx: &crate::RunContext, path: &PathBuf) -> Result<bool> {
     let new = format!("{}\n", trimmed);
     if new != content {
         if ctx.dry_run {
-            if ctx.debug { eprintln!("dry-run: would fix EOF in {}", path.display()); }
+            if ctx.debug {
+                eprintln!("dry-run: would fix EOF in {}", path.display());
+            }
             ctx.changelog.lock().unwrap().record_change(
                 "end-of-file-fixer",
-                &format!("Would normalize newlines at end of {}", path.display())
+                &format!("Would normalize newlines at end of {}", path.display()),
             );
             return Ok(true);
         }
-        let mut f = fs::OpenOptions::new().write(true).truncate(true).open(path)?;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open(path)?;
         f.write_all(new.as_bytes())?;
         ctx.changelog.lock().unwrap().record_change(
             "end-of-file-fixer",
-            &format!("Normalized newlines at end of {}", path.display())
+            &format!("Normalized newlines at end of {}", path.display()),
         );
-        ctx.changelog.lock().unwrap().record_file_modified("end-of-file-fixer", path);
+        ctx.changelog
+            .lock()
+            .unwrap()
+            .record_file_modified("end-of-file-fixer", path);
         Ok(true)
     } else {
         Ok(false)

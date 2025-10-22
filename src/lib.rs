@@ -1,10 +1,11 @@
-pub mod hooks;
-pub mod config;
-pub mod validate;
 pub mod changelog;
+pub mod cli;
+pub mod config;
+pub mod hooks;
+pub mod validate;
 
-use std::sync::{Arc, Mutex};
 use changelog::Changelog;
+use std::sync::{Arc, Mutex};
 
 #[derive(Debug, Clone)]
 pub struct RunContext {
@@ -26,8 +27,8 @@ impl Default for RunContext {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn test_changelog_recording() {

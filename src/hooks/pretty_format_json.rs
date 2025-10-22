@@ -1,13 +1,15 @@
 use anyhow::Result;
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 pub fn run(paths: Vec<PathBuf>) -> Result<()> {
     run_with_ctx(&crate::RunContext::default(), paths)
 }
 
 pub fn run_with_ctx(ctx: &crate::RunContext, paths: Vec<PathBuf>) -> Result<()> {
-    if ctx.debug { eprintln!("pretty_format_json: dry_run={}", ctx.dry_run); }
+    if ctx.debug {
+        eprintln!("pretty_format_json: dry_run={}", ctx.dry_run);
+    }
     let mut any_changes = false;
     for p in paths {
         if p.is_file() {
@@ -18,7 +20,9 @@ pub fn run_with_ctx(ctx: &crate::RunContext, paths: Vec<PathBuf>) -> Result<()> 
     }
     if any_changes {
         if ctx.dry_run {
-            if ctx.debug { eprintln!("dry-run: pretty_format_json would have changed files"); }
+            if ctx.debug {
+                eprintln!("dry-run: pretty_format_json would have changed files");
+            }
             return Ok(());
         }
         std::process::exit(1);
@@ -31,9 +35,13 @@ fn format_file_with_ctx(ctx: &crate::RunContext, path: &PathBuf) -> Result<bool>
         Ok(s) => s,
         Err(e) => {
             if e.kind() == std::io::ErrorKind::InvalidData {
-                if ctx.debug { eprintln!("skipping non-utf8 file {}", path.display()); }
+                if ctx.debug {
+                    eprintln!("skipping non-utf8 file {}", path.display());
+                }
                 return Ok(false);
-            } else { return Err(e.into()); }
+            } else {
+                return Err(e.into());
+            }
         }
     };
     let v: serde_json::Value = match serde_json::from_str(&content) {
@@ -43,19 +51,24 @@ fn format_file_with_ctx(ctx: &crate::RunContext, path: &PathBuf) -> Result<bool>
     let new = serde_json::to_string_pretty(&v)? + "\n";
     if new != content {
         if ctx.dry_run {
-            if ctx.debug { eprintln!("dry-run: would format JSON in {}", path.display()); }
+            if ctx.debug {
+                eprintln!("dry-run: would format JSON in {}", path.display());
+            }
             ctx.changelog.lock().unwrap().record_change(
                 "pretty-format-json",
-                &format!("Would format JSON in {}", path.display())
+                &format!("Would format JSON in {}", path.display()),
             );
             return Ok(true);
         }
         fs::write(path, new)?;
         ctx.changelog.lock().unwrap().record_change(
             "pretty-format-json",
-            &format!("Formatted JSON in {}", path.display())
+            &format!("Formatted JSON in {}", path.display()),
         );
-        ctx.changelog.lock().unwrap().record_file_modified("pretty-format-json", path);
+        ctx.changelog
+            .lock()
+            .unwrap()
+            .record_file_modified("pretty-format-json", path);
         Ok(true)
     } else {
         Ok(false)

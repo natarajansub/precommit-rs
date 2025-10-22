@@ -40,7 +40,9 @@ def make_png(width, height, out_path):
 
 def main():
     if len(sys.argv) == 4:
-        w = int(sys.argv[1]); h = int(sys.argv[2]); out = sys.argv[3]
+        w = int(sys.argv[1])
+        h = int(sys.argv[2])
+        out = sys.argv[3]
         make_png(w,h,out)
         return
     # default
