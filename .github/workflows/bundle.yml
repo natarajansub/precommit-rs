@@ -219,9 +219,10 @@ jobs:
             done
           }
 
-          copy_app_bundles() {
+          package_app_bundles() {
             local dir="$1"
             local dest_prefix="$2"
+            local workspace_root="$(pwd)"
             if [ ! -d "$dir" ]; then
               echo "Skipping $dir for app bundles (not found)"
               return
@@ -233,10 +234,22 @@ jobs:
               if [ "$rel_path" = "$bundle" ]; then
                 rel_path=$(basename "$bundle")
               fi
-              local dest="release-assets/$dest_prefix$rel_path"
-              mkdir -p "$(dirname "$dest")"
-              rm -rf "$dest"
-              cp -R "$bundle" "$dest"
+              local rel_dir=$(dirname "$rel_path")
+              if [ "$rel_dir" = "." ]; then
+                rel_dir=""
+              fi
+              local zip_name="$(basename "$rel_path").zip"
+              local dest_dir="release-assets/$dest_prefix$rel_dir"
+              local zip_path="$dest_dir/$zip_name"
+              local zip_path_abs="$workspace_root/$zip_path"
+              mkdir -p "$dest_dir"
+              rm -f "$zip_path_abs"
+              (
+                cd "$(dirname "$bundle")" || return
+                local base="$(basename "$bundle")"
+                echo "Packaging $base into $zip_path_abs"
+                zip -r -q --symlinks "$zip_path_abs" "$base"
+              )
             done
           }
 
@@ -271,7 +284,7 @@ jobs:
             "target/release/bundle/macos"
           )
           for dir in "${mac_dirs[@]}"; do
-            copy_app_bundles "$dir" "macos/"
+            package_app_bundles "$dir" "macos/"
             collect_artifacts "$dir" "*.dmg" "macos/"
           done
 
