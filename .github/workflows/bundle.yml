@@ -57,7 +57,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget xz-utils libfuse2 ca-certificates
+          sudo apt-get install -y wget xz-utils libfuse2 ca-certificates rpm
           # Download appimagetool
           wget -O appimagetool.tar.xz https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool.tar.xz
@@ -68,7 +68,19 @@ jobs:
         shell: bash
         run: |
           set -o pipefail || true
-          for pkg in crates/*; do (cd "$pkg" && cargo bundle --release); done && cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
+          for pkg in crates/*; do
+            echo "Bundling $pkg"
+            (cd "$pkg" && cargo bundle --release) || true
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              echo "Bundling RPM for $pkg"
+              (cd "$pkg" && cargo bundle --release --format rpm) || true
+            fi
+          done
+          cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            echo "Bundling RPM for precommit-rs"
+            cargo bundle --release --bin precommit-rs --format rpm 2>&1 | tee -a bundle.log || true
+          fi
 
 
       - name: Attempt to build AppImage from bundle (Linux)
