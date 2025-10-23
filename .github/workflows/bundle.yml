@@ -73,18 +73,27 @@ jobs:
         run: |
           set -o pipefail || true
           packages=(trailing-whitespace end-of-file-fixer check-added-large-files check-yaml pretty-format-json)
-          for pkg in "${packages[@]}"; do
+          manifests=(
+            "crates/trailing-whitespace/Cargo.toml"
+            "crates/end-of-file-fixer/Cargo.toml"
+            "crates/check-added-large-files/Cargo.toml"
+            "crates/check-yaml/Cargo.toml"
+            "crates/pretty-format-json/Cargo.toml"
+          )
+          for idx in "${!packages[@]}"; do
+            pkg="${packages[$idx]}"
+            manifest="${manifests[$idx]}"
             echo "Bundling package $pkg"
-            cargo bundle --release -p "$pkg" || true
+            cargo bundle --release --manifest-path "$manifest" || true
             if [ "$RUNNER_OS" = "Linux" ]; then
               echo "Generating RPM for $pkg"
-              cargo generate-rpm --package "$pkg" || true
+              cargo generate-rpm --manifest-path "$manifest" || true
             fi
           done
-          cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
+          cargo bundle --release --manifest-path Cargo.toml --bin precommit-rs 2>&1 | tee bundle.log || true
           if [ "$RUNNER_OS" = "Linux" ]; then
             echo "Generating RPM for precommit-rs"
-            cargo generate-rpm --package precommit-rs 2>&1 | tee -a bundle.log || true
+            cargo generate-rpm --manifest-path Cargo.toml 2>&1 | tee -a bundle.log || true
           fi
 
 
