@@ -27,7 +27,7 @@ summary = "Trailing whitespace fixer hook"
 description = "Trailing whitespace fixer hook for precommit-rs."
 
 [package.metadata.generate-rpm]
-requires = ["bash"]
+requires = "bash"
 assets = [
   { source = "target/release/trailing-whitespace", dest = "/usr/bin/trailing-whitespace", mode = "755" }
 ]

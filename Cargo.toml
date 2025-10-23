@@ -55,7 +55,7 @@ description = "Pre-commit hook framework and bundled hooks implemented in Rust."
 maintainer = "nats<you@example.com>"
 
 [package.metadata.generate-rpm]
-requires = ["bash"]
+requires = "bash"
 assets = [
   { source = "target/release/precommit-rs", dest = "/usr/bin/precommit-rs", mode = "755" }
 ]

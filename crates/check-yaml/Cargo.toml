@@ -27,7 +27,7 @@ summary = "YAML validation hook"
 description = "YAML validation hook for precommit-rs."
 
 [package.metadata.generate-rpm]
-requires = ["bash"]
+requires = "bash"
 assets = [
   { source = "target/release/check-yaml", dest = "/usr/bin/check-yaml", mode = "755" }
 ]
