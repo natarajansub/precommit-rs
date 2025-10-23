@@ -5,6 +5,19 @@ use std::{fs::File, io, path::PathBuf};
 
 use precommit_rs::{cli, config, hooks, RunContext};
 
+const COLOR_RESET: &str = "\x1b[0m";
+const COLOR_REPO: &str = "\x1b[1;34m";
+const COLOR_HOOK_ENABLED: &str = "\x1b[1;36m";
+const COLOR_HOOK_DISABLED: &str = "\x1b[2;36m";
+const COLOR_STATUS_ENABLED: &str = "\x1b[32m";
+const COLOR_STATUS_DISABLED: &str = "\x1b[2;31m";
+const COLOR_KIND_BUILTIN: &str = "\x1b[34m";
+const COLOR_KIND_EXTERNAL: &str = "\x1b[35m";
+const COLOR_COMMAND: &str = "\x1b[32m";
+const COLOR_FILES: &str = "\x1b[33m";
+const COLOR_NOTE: &str = "\x1b[2;37m";
+const COLOR_INSTALL: &str = "\x1b[35m";
+
 #[derive(Clone, ValueEnum, Debug)]
 enum HookLanguage {
     Rust,
@@ -145,64 +158,107 @@ fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
 
+            let scope_label = if all { "including disabled" } else { "enabled only" };
             println!(
-                "Hooks in {} ({}):",
+                "{}Hooks in{} {} ({})",
+                COLOR_REPO,
+                COLOR_RESET,
                 cfg_path.display(),
-                if all { "including disabled" } else { "enabled only" }
+                scope_label
             );
 
             for repo in repos {
                 if repo.hooks().is_empty() {
                     continue;
                 }
-                println!("repo: {}{}", repo.repo(), repo.rev().map(|rev| format!(" @{}", rev)).unwrap_or_default());
+                let rev_suffix = repo
+                    .rev()
+                    .map(|rev| format!(" @{}{}{}", COLOR_NOTE, rev, COLOR_RESET))
+                    .unwrap_or_default();
+                println!(
+                    "{}repo:{} {}{}",
+                    COLOR_REPO,
+                    COLOR_RESET,
+                    repo.repo(),
+                    rev_suffix
+                );
                 for hook in repo.hooks() {
                     if !all && !hook.is_enabled() {
                         continue;
                     }
 
-                    let status = if hook.is_enabled() { "enabled" } else { "disabled" };
-                    let kind = if hook.is_builtin() {
-                        "builtin"
+                    let (id_color, status_label, kind_label) = if hook.is_enabled() {
+                        (
+                            COLOR_HOOK_ENABLED,
+                            format!("{}{status}{}", COLOR_STATUS_ENABLED, COLOR_RESET, status = "enabled"),
+                            if hook.is_builtin() {
+                                format!("{}{kind}{}", COLOR_KIND_BUILTIN, COLOR_RESET, kind = "builtin")
+                            } else {
+                                format!("{}{kind}{}", COLOR_KIND_EXTERNAL, COLOR_RESET, kind = "external")
+                            },
+                        )
                     } else {
-                        "external"
+                        (
+                            COLOR_HOOK_DISABLED,
+                            format!("{}{status}{}", COLOR_STATUS_DISABLED, COLOR_RESET, status = "disabled"),
+                            if hook.is_builtin() {
+                                format!("{}{kind}{}", COLOR_KIND_BUILTIN, COLOR_RESET, kind = "builtin")
+                            } else {
+                                format!("{}{kind}{}", COLOR_KIND_EXTERNAL, COLOR_RESET, kind = "external")
+                            },
+                        )
                     };
                     let install_note = if hook.command_is_install() {
                         hook.install()
-                            .map(|inst| format!(" [install: {}]", inst.summary()))
-                            .unwrap_or_else(|| " [install: missing config]".to_string())
+                            .map(|inst| {
+                                format!(
+                                    " {}[install: {}]{}",
+                                    COLOR_INSTALL,
+                                    inst.summary(),
+                                    COLOR_RESET
+                                )
+                            })
+                            .unwrap_or_else(|| {
+                                format!(
+                                    " {}[install: missing config]{}",
+                                    COLOR_INSTALL,
+                                    COLOR_RESET
+                                )
+                            })
                     } else {
                         String::new()
                     };
                     let entry_note = hook
                         .entry()
-                        .map(|e| format!(" [entry: {}]", e))
+                        .map(|e| format!(" {}[entry: {}]{}", COLOR_NOTE, e, COLOR_RESET))
                         .unwrap_or_default();
                     let language_note = hook
                         .language_field()
-                        .map(|l| format!(" [language: {}]", l))
+                        .map(|l| format!(" {}[language: {}]{}", COLOR_NOTE, l, COLOR_RESET))
                         .unwrap_or_default();
                     let stages_note = hook
                         .stages()
                         .filter(|s| !s.is_empty())
-                        .map(|s| format!(" [stages: {}]", s.join(",")))
+                        .map(|s| format!(" {}[stages: {}]{}", COLOR_NOTE, s.join(","), COLOR_RESET))
                         .unwrap_or_default();
                     let deps_note = hook
                         .additional_dependencies()
                         .filter(|d| !d.is_empty())
-                        .map(|d| format!(" [deps: {}]", d.join(",")))
+                        .map(|d| format!(" {}[deps: {}]{}", COLOR_NOTE, d.join(","), COLOR_RESET))
                         .unwrap_or_default();
 
                     if let Some(cmd) = hook.command() {
                         println!(
-                            "  - {} ({}, {}) -> {}{}{}{}{}{}{}",
+                            "  - {}{}{} ({}, {}) -> {}{}{}{}{}{}{}",
+                            id_color,
                             hook.id(),
-                            status,
-                            kind,
-                            cmd,
+                            COLOR_RESET,
+                            status_label,
+                            kind_label,
+                            format!("{}{cmd}{}", COLOR_COMMAND, COLOR_RESET, cmd = cmd),
                             hook
                                 .args()
-                                .map(|args| format!(" {}", args.join(" ")))
+                                .map(|args| format!(" {}{}{}", COLOR_COMMAND, args.join(" "), COLOR_RESET))
                                 .unwrap_or_default(),
                             install_note,
                             entry_note,
@@ -212,13 +268,15 @@ fn main() -> anyhow::Result<()> {
                         );
                     } else {
                         println!(
-                            "  - {} ({}, {}){}{}{}{}{}{}",
+                            "  - {}{}{} ({}, {}){}{}{}{}{}{}",
+                            id_color,
                             hook.id(),
-                            status,
-                            kind,
+                            COLOR_RESET,
+                            status_label,
+                            kind_label,
                             hook
                                 .files()
-                                .map(|f| format!(" [files: {}]", f))
+                                .map(|f| format!(" {}[files: {}]{}", COLOR_FILES, f, COLOR_RESET))
                                 .unwrap_or_default(),
                             install_note,
                             entry_note,
