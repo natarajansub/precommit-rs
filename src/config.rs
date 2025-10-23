@@ -1,4 +1,4 @@
-use crate::RunContext;
+use crate::{lock, RunContext};
 use anyhow::{anyhow, Context, Result};
 use glob::Pattern;
 use ignore::WalkBuilder;
@@ -15,12 +15,25 @@ const TOOLS_DIR: &str = ".precommit-tools";
 
 #[derive(Debug, Deserialize)]
 pub struct PreCommitConfig {
-    hooks: Option<Vec<HookConfig>>,
+    repos: Option<Vec<RepoConfig>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RepoConfig {
+    repo: String,
+    rev: Option<String>,
+    #[serde(default)]
+    hooks: Vec<HookConfig>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct HookConfig {
     id: String,
+    name: Option<String>,
+    entry: Option<String>,
+    language: Option<String>,
+    stages: Option<Vec<String>>,
+    additional_dependencies: Option<Vec<String>>,
     enabled: Option<bool>,
     args: Option<Vec<String>>,
     files: Option<String>,
@@ -39,6 +52,8 @@ pub struct InstallConfig {
     #[serde(default)]
     package: Option<String>,
     #[serde(default)]
+    version: Option<String>,
+    #[serde(default)]
     entry: Option<String>,
     #[serde(default)]
     binary: Option<String>,
@@ -56,6 +71,7 @@ pub enum InstallLanguage {
     Rust,
     Python,
     Node,
+    Go,
 }
 
 impl Default for InstallLanguage {
@@ -71,16 +87,62 @@ impl PreCommitConfig {
         Ok(cfg)
     }
 
+    pub fn repos(&self) -> &[RepoConfig] {
+        self.repos.as_deref().unwrap_or(&[])
+    }
+
+    pub fn local_hooks(&self) -> Vec<(&RepoConfig, &HookConfig)> {
+        self.repos
+            .as_ref()
+            .map(|repos| {
+                repos
+                    .iter()
+                    .filter(|repo| repo.repo == "local")
+                    .flat_map(|repo| repo.hooks.iter().map(move |hook| (repo, hook)))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+}
+
+impl RepoConfig {
+    pub fn repo(&self) -> &str {
+        &self.repo
+    }
+
+    pub fn rev(&self) -> Option<&str> {
+        self.rev.as_deref()
+    }
+
     pub fn hooks(&self) -> &[HookConfig] {
-        self.hooks.as_deref().unwrap_or(&[])
+        &self.hooks
     }
 }
 
 // Helper function to collect matching files
+fn expand_pattern(pattern: &str) -> Vec<String> {
+    if let (Some(start), Some(end)) = (pattern.find('{'), pattern.find('}')) {
+        if end > start {
+            let before = &pattern[..start];
+            let after = &pattern[end + 1..];
+            let inner = &pattern[start + 1..end];
+            return inner
+                .split(',')
+                .map(|alt| format!("{}{}{}", before, alt.trim(), after))
+                .collect();
+        }
+    }
+    vec![pattern.to_string()]
+}
+
 fn collect_files(pattern: Option<&String>) -> Result<Vec<PathBuf>> {
     if let Some(pattern) = pattern {
-        let pattern = Pattern::new(pattern)
-            .map_err(|e| anyhow!("Invalid glob pattern '{}': {}", pattern, e))?;
+        let mut compiled = Vec::new();
+        for pat in expand_pattern(pattern) {
+            compiled.push(
+                Pattern::new(&pat).map_err(|e| anyhow!("Invalid glob pattern '{}': {}", pat, e))?,
+            );
+        }
 
         let mut paths = Vec::new();
         let walker = WalkBuilder::new(".")
@@ -89,16 +151,24 @@ fn collect_files(pattern: Option<&String>) -> Result<Vec<PathBuf>> {
             .git_global(true)
             .git_exclude(true)
             .build();
+        let root = std::env::current_dir()?;
 
         for entry in walker {
             let entry = entry.map_err(|e| anyhow!("Failed to walk project files: {}", e))?;
             if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
                 continue;
             }
-            if let Some(s) = entry.path().to_str() {
-                if pattern.matches(s) {
-                    paths.push(entry.path().to_path_buf());
-                }
+
+            let absolute = entry.path();
+            let relative = absolute.strip_prefix(&root).unwrap_or(absolute);
+            let rel_str = relative.to_string_lossy();
+            let abs_str = absolute.to_string_lossy();
+
+            if compiled
+                .iter()
+                .any(|pat| pat.matches(rel_str.as_ref()) || pat.matches(abs_str.as_ref()))
+            {
+                paths.push(absolute.to_path_buf());
             }
         }
         Ok(paths)
@@ -110,6 +180,26 @@ fn collect_files(pattern: Option<&String>) -> Result<Vec<PathBuf>> {
 impl HookConfig {
     pub fn id(&self) -> &str {
         &self.id
+    }
+
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_deref()
+    }
+
+    pub fn entry(&self) -> Option<&str> {
+        self.entry.as_deref()
+    }
+
+    pub fn language_field(&self) -> Option<&str> {
+        self.language.as_deref()
+    }
+
+    pub fn stages(&self) -> Option<&[String]> {
+        self.stages.as_deref()
+    }
+
+    pub fn additional_dependencies(&self) -> Option<&[String]> {
+        self.additional_dependencies.as_deref()
     }
 
     pub fn is_enabled(&self) -> bool {
@@ -157,6 +247,10 @@ impl InstallConfig {
         self.package.as_deref()
     }
 
+    pub fn version(&self) -> Option<&str> {
+        self.version.as_deref()
+    }
+
     pub fn entry<'a>(&'a self, hook_id: &'a str) -> &'a str {
         self.entry
             .as_deref()
@@ -188,11 +282,13 @@ impl InstallConfig {
             .or(self.repo.as_deref())
             .unwrap_or("unknown");
         let entry = self.entry.as_deref().unwrap_or("default");
+        let version = self.version.as_deref().unwrap_or("latest");
         format!(
-            "lang={} target={} entry={}",
+            "lang={} target={} entry={} version={}",
             self.language.as_str(),
             target,
-            entry
+            entry,
+            version
         )
     }
 }
@@ -203,6 +299,7 @@ impl InstallLanguage {
             InstallLanguage::Rust => "rust",
             InstallLanguage::Python => "python",
             InstallLanguage::Node => "node",
+            InstallLanguage::Go => "go",
         }
     }
 }
@@ -263,12 +360,12 @@ fn run_external_command(
 
 // Main function to run the hooks from config
 pub fn run_config(ctx: &RunContext, cfg: &PreCommitConfig) -> Result<()> {
-    let hooks = cfg
-        .hooks
-        .as_ref()
-        .ok_or_else(|| anyhow!("No hooks configured"))?;
+    let hooks = cfg.local_hooks();
+    if hooks.is_empty() {
+        return Err(anyhow!("No local hooks configured"));
+    }
 
-    for h in hooks {
+    for (_, h) in hooks {
         let enabled = h.enabled.unwrap_or(true);
         if !enabled {
             continue;
@@ -276,6 +373,13 @@ pub fn run_config(ctx: &RunContext, cfg: &PreCommitConfig) -> Result<()> {
 
         // Build list of matching files
         let paths = collect_files(h.files.as_ref())?;
+
+        if paths.is_empty() {
+            if ctx.debug {
+                eprintln!("Skipping hook {}: no matching files", h.id());
+            }
+            continue;
+        }
 
         // Record files being checked in changelog
         for path in &paths {
@@ -358,7 +462,7 @@ pub fn run_config(ctx: &RunContext, cfg: &PreCommitConfig) -> Result<()> {
     Ok(())
 }
 
-fn ensure_installed(ctx: &RunContext, hook: &HookConfig) -> Result<PathBuf> {
+pub fn ensure_installed(ctx: &RunContext, hook: &HookConfig) -> Result<PathBuf> {
     let install = hook.install().with_context(|| {
         format!(
             "Hook '{}' requires install but no install configuration provided",
@@ -373,6 +477,7 @@ fn ensure_installed(ctx: &RunContext, hook: &HookConfig) -> Result<PathBuf> {
         InstallLanguage::Rust => install_rust(ctx, hook, install, &root)?,
         InstallLanguage::Python => install_python(ctx, hook, install, &root)?,
         InstallLanguage::Node => install_node(ctx, hook, install, &root)?,
+        InstallLanguage::Go => install_go(ctx, hook, install, &root)?,
     };
 
     if !path.exists() {
@@ -382,6 +487,30 @@ fn ensure_installed(ctx: &RunContext, hook: &HookConfig) -> Result<PathBuf> {
             path.display()
         );
     }
+
+    let language = install.language().as_str();
+    let source_string = if let Some(pkg) = install.package() {
+        if let Some(ver) = install.version() {
+            Some(format!("package:{pkg}@{ver}"))
+        } else {
+            Some(format!("package:{pkg}"))
+        }
+    } else if let Some(repo) = install.repo() {
+        if let Some(ver) = install.version() {
+            Some(format!("repo:{repo}@{ver}"))
+        } else {
+            Some(format!("repo:{repo}"))
+        }
+    } else {
+        None
+    };
+    lock::record_hook(
+        hook.id(),
+        language,
+        source_string.as_deref(),
+        Some(install.entry(hook.id())),
+        &path,
+    )?;
 
     Ok(path)
 }
@@ -425,6 +554,12 @@ fn install_rust(
         cmd.arg("--bin").arg(bin);
     }
 
+    if let Some(ver) = install.version() {
+        if install.package().is_some() && install.repo().is_none() {
+            cmd.arg("--version").arg(ver);
+        }
+    }
+
     if let Some(args) = install.install_args() {
         cmd.args(args);
     }
@@ -462,7 +597,17 @@ fn install_python(
     // Determine the package reference (package name or git repo)
     let target = install
         .package()
-        .map(|s| s.to_string())
+        .map(|s| {
+            if let Some(ver) = install.version() {
+                if s.contains("==") {
+                    s.to_string()
+                } else {
+                    format!("{s}=={ver}")
+                }
+            } else {
+                s.to_string()
+            }
+        })
         .or_else(|| install.repo().map(|r| format!("git+{}", r)))
         .ok_or_else(|| {
             anyhow!(
@@ -531,9 +676,80 @@ fn install_node(
         cmd.args(args);
     }
 
-    cmd.arg(target);
+    if let Some(pkg) = install.package() {
+        let target_spec = if let Some(ver) = install.version() {
+            format!("{}@{}", pkg, ver)
+        } else {
+            pkg.to_string()
+        };
+        cmd.arg(target_spec);
+    } else {
+        cmd.arg(target);
+    }
 
     run_and_check(cmd, ctx, "npm install")?;
+
+    Ok(bin_path)
+}
+
+fn install_go(
+    ctx: &RunContext,
+    hook: &HookConfig,
+    install: &InstallConfig,
+    root: &Path,
+) -> Result<PathBuf> {
+    let entry = install.entry(hook.id());
+    let bin_path = root.join("bin").join(entry);
+    if bin_path.exists() {
+        return Ok(bin_path);
+    }
+
+    fs::create_dir_all(root.join("bin"))?;
+
+    let package = install.package().ok_or_else(|| {
+        anyhow!(
+            "Install for hook '{}' requires 'package' (module path)",
+            hook.id
+        )
+    })?;
+
+    if ctx.debug {
+        eprintln!(
+            "Installing go hook '{}' from {} into {}",
+            hook.id,
+            package,
+            root.display()
+        );
+    }
+
+    let mut cmd = Command::new("go");
+    cmd.env("GOBIN", root.join("bin")).arg("install");
+
+    if let Some(args) = install.install_args() {
+        cmd.args(args);
+    }
+
+    let package_spec = if let Some(ver) = install.version() {
+        format!("{}@{}", package, ver)
+    } else if package.contains('@') {
+        package.to_string()
+    } else {
+        anyhow::bail!(
+            "Install for hook '{}' requires a version for Go modules; set install.version or include '@<version>' in package",
+            hook.id
+        );
+    };
+
+    cmd.arg(&package_spec);
+
+    run_and_check(cmd, ctx, "go install")?;
+
+    if !bin_path.exists() {
+        anyhow::bail!(
+            "After go install, expected binary {} but it was not created",
+            bin_path.display()
+        );
+    }
 
     Ok(bin_path)
 }
@@ -569,65 +785,86 @@ pub fn write_default_config(path: &std::path::Path) -> Result<()> {
         "#",
         "# For external tools, precommit-rs manages installation automatically.",
         "# Python hooks use the `uv` CLI (https://docs.astral.sh/uv/) to create per-hook virtual environments.",
-        "# Ensure `uv` is available on PATH before running these hooks.",
-        "# Built-in hooks provided by precommit-rs:",
-        "hooks:",
-        "  - id: trailing-whitespace",
-        "    files: '**/*.{rs,py,js,ts,txt,md}'",
-        "    enabled: true",
-        "  - id: end-of-file-fixer",
-        "    files: '**/*.{rs,py,txt,md}'",
-        "    enabled: true",
-        "  - id: check-yaml",
-        "    files: '**/*.{yml,yaml}'",
-        "    enabled: true",
-        "  - id: pretty-format-json",
-        "    files: '**/*.{json,jsonc}'",
-        "    enabled: false",
-        "  - id: check-added-large-files",
-        "    files: '**/*'",
-        "    enabled: false",
-        "    args: ['500000']  # optional max size in bytes",
+        "# Ensure `uv`, `npm`, `cargo`, and `go` are available on PATH before running the respective external hooks.",
+        "repos:",
+        "  - repo: local",
+        "    hooks:",
+        "      - id: trailing-whitespace",
+        "        name: trailing-whitespace",
+        "        entry: trailing-whitespace",
+        "        language: system",
+        "        pass_filenames: true",
+        "        files: '**/*.{rs,py,js,ts,txt,md}'",
+        "      - id: end-of-file-fixer",
+        "        name: end-of-file-fixer",
+        "        entry: end-of-file-fixer",
+        "        language: system",
+        "        files: '**/*.{rs,py,txt,md}'",
+        "      - id: check-yaml",
+        "        name: check-yaml",
+        "        entry: check-yaml",
+        "        language: system",
+        "        files: '**/*.{yml,yaml}'",
+        "      - id: pretty-format-json",
+        "        name: pretty-format-json",
+        "        entry: pretty-format-json",
+        "        language: system",
+        "        files: '**/*.{json,jsonc}'",
+        "      - id: check-added-large-files",
+        "        name: check-added-large-files",
+        "        entry: check-added-large-files",
+        "        language: system",
+        "        args: ['500000']  # optional max size in bytes",
         "",
-        "  # Example: install and run a Python tool (managed with `uv venv`)",
-        "  - id: ruff-check",
-        "    files: '**/*.py'",
-        "    enabled: false",
-        "    command: \"{install}\"",
-        "    install:",
-        "      language: python",
-        "      package: ruff",
-        "      entry: ruff",
-        "    args: ['check', '--fix']",
+        "      # Example hooks (uncomment to enable):",
+        "      # - id: ruff-check",
+        "      #   name: ruff-check",
+        "      #   entry: ruff",
+        "      #   language: system",
+        "      #   command: \"{install}\"",
+        "      #   files: '**/*.py'",
+        "      #   install:",
+        "      #     language: python",
+        "      #     package: ruff",
+        "      #     entry: ruff",
+        "      #   args: ['check', '--fix']",
         "",
-        "  # Example: use a Node package from npm",
-        "  - id: prettier",
-        "    files: '**/*.{js,ts,jsx,tsx,json,css,md}'",
-        "    enabled: false",
-        "    command: \"{install}\"",
-        "    install:",
-        "      language: node",
-        "      package: prettier",
-        "      entry: prettier",
-        "    args: ['--write']",
+        "      # - id: prettier",
+        "      #   name: prettier",
+        "      #   entry: prettier",
+        "      #   language: system",
+        "      #   command: \"{install}\"",
+        "      #   files: '**/*.{js,ts,jsx,tsx,json,css,md}'",
+        "      #   install:",
+        "      #     language: node",
+        "      #     package: prettier",
+        "      #     entry: prettier",
+        "      #   args: ['--write']",
         "",
-        "  # Example: install a Rust crate from crates.io or Git",
-        "  - id: cargo-deny",
-        "    files: '**/Cargo.lock'",
-        "    enabled: false",
-        "    command: \"{install}\"",
-        "    install:",
-        "      language: rust",
-        "      package: cargo-deny",
-        "      binary: cargo-deny",
-        "    args: ['check']",
+        "      # - id: cargo-deny",
+        "      #   name: cargo-deny",
+        "      #   entry: cargo-deny",
+        "      #   language: system",
+        "      #   command: \"{install}\"",
+        "      #   files: '**/Cargo.lock'",
+        "      #   install:",
+        "      #     language: rust",
+        "      #     package: cargo-deny",
+        "      #     binary: cargo-deny",
+        "      #   args: ['check']",
         "",
-        "  # Example: run a locally available command/binary",
-        "  - id: gofmt",
-        "    files: '**/*.go'",
-        "    enabled: false",
-        "    command: gofmt",
-        "    args: ['-w']",
+        "      # - id: golangci-lint",
+        "      #   name: golangci-lint",
+        "      #   entry: golangci-lint",
+        "      #   language: system",
+        "      #   command: \"{install}\"",
+        "      #   files: '**/*.go'",
+        "      #   install:",
+        "      #     language: go",
+        "      #     package: github.com/golangci/golangci-lint/cmd/golangci-lint",
+        "      #     version: v1.61.0",
+        "      #     entry: golangci-lint",
+        "      #   args: ['run', '--fix']",
     ];
     let mut sample = lines.join("\n");
     sample.push('\n');

@@ -3,9 +3,7 @@ use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 use std::{fs::File, io, path::PathBuf};
 
-use precommit_rs::{cli, RunContext};
-mod config;
-mod hooks;
+use precommit_rs::{cli, config, hooks, RunContext};
 
 #[derive(Clone, ValueEnum, Debug)]
 enum HookLanguage {
@@ -140,10 +138,10 @@ fn main() -> anyhow::Result<()> {
         Commands::ListHooks { config, all } => {
             let cfg_path = config.unwrap_or_else(|| PathBuf::from(".pre-commit.yaml"));
             let conf = config::PreCommitConfig::from_file(&cfg_path)?;
-            let hooks = conf.hooks();
+            let repos = conf.repos();
 
-            if hooks.is_empty() {
-                println!("No hooks configured in {}", cfg_path.display());
+            if repos.is_empty() {
+                println!("No repos configured in {}", cfg_path.display());
                 return Ok(());
             }
 
@@ -153,50 +151,82 @@ fn main() -> anyhow::Result<()> {
                 if all { "including disabled" } else { "enabled only" }
             );
 
-            for hook in hooks {
-                if !all && !hook.is_enabled() {
+            for repo in repos {
+                if repo.hooks().is_empty() {
                     continue;
                 }
+                println!("repo: {}{}", repo.repo(), repo.rev().map(|rev| format!(" @{}", rev)).unwrap_or_default());
+                for hook in repo.hooks() {
+                    if !all && !hook.is_enabled() {
+                        continue;
+                    }
 
-                let status = if hook.is_enabled() { "enabled" } else { "disabled" };
-                let kind = if hook.is_builtin() {
-                    "builtin"
-                } else {
-                    "external"
-                };
-                let install_note = if hook.command_is_install() {
-                    hook.install()
-                        .map(|inst| format!(" [install: {}]", inst.summary()))
-                        .unwrap_or_else(|| " [install: missing config]".to_string())
-                } else {
-                    String::new()
-                };
+                    let status = if hook.is_enabled() { "enabled" } else { "disabled" };
+                    let kind = if hook.is_builtin() {
+                        "builtin"
+                    } else {
+                        "external"
+                    };
+                    let install_note = if hook.command_is_install() {
+                        hook.install()
+                            .map(|inst| format!(" [install: {}]", inst.summary()))
+                            .unwrap_or_else(|| " [install: missing config]".to_string())
+                    } else {
+                        String::new()
+                    };
+                    let entry_note = hook
+                        .entry()
+                        .map(|e| format!(" [entry: {}]", e))
+                        .unwrap_or_default();
+                    let language_note = hook
+                        .language_field()
+                        .map(|l| format!(" [language: {}]", l))
+                        .unwrap_or_default();
+                    let stages_note = hook
+                        .stages()
+                        .filter(|s| !s.is_empty())
+                        .map(|s| format!(" [stages: {}]", s.join(",")))
+                        .unwrap_or_default();
+                    let deps_note = hook
+                        .additional_dependencies()
+                        .filter(|d| !d.is_empty())
+                        .map(|d| format!(" [deps: {}]", d.join(",")))
+                        .unwrap_or_default();
 
-                if let Some(cmd) = hook.command() {
-                    println!(
-                        "- {} ({}, {}) -> {}{}{}",
-                        hook.id(),
-                        status,
-                        kind,
-                        cmd,
-                        hook
-                            .args()
-                            .map(|args| format!(" {}", args.join(" ")))
-                            .unwrap_or_default(),
-                        install_note
-                    );
-                } else {
-                    println!(
-                        "- {} ({}, {}){}{}",
-                        hook.id(),
-                        status,
-                        kind,
-                        hook
-                            .files()
-                            .map(|f| format!(" [files: {}]", f))
-                            .unwrap_or_default(),
-                        install_note
-                    );
+                    if let Some(cmd) = hook.command() {
+                        println!(
+                            "  - {} ({}, {}) -> {}{}{}{}{}{}{}",
+                            hook.id(),
+                            status,
+                            kind,
+                            cmd,
+                            hook
+                                .args()
+                                .map(|args| format!(" {}", args.join(" ")))
+                                .unwrap_or_default(),
+                            install_note,
+                            entry_note,
+                            language_note,
+                            stages_note,
+                            deps_note
+                        );
+                    } else {
+                        println!(
+                            "  - {} ({}, {}){}{}{}{}{}{}",
+                            hook.id(),
+                            status,
+                            kind,
+                            hook
+                                .files()
+                                .map(|f| format!(" [files: {}]", f))
+                                .unwrap_or_default(),
+                            install_note,
+                            entry_note,
+                            language_note,
+                            stages_note,
+                            deps_note
+                        );
+                    }
                 }
             }
 
@@ -353,6 +383,25 @@ fn main() -> anyhow::Result<()> {
             }
 
             println!("Installed git hook at {} using binary: {}", hook_path.display(), binary_path);
+
+            let cfg_path = PathBuf::from(&repo_root).join(".pre-commit.yaml");
+            if cfg_path.exists() {
+                if ctx.debug {
+                    eprintln!("Ensuring external hooks are installed per {}", cfg_path.display());
+                }
+                let conf = config::PreCommitConfig::from_file(&cfg_path)?;
+                for (_, hook) in conf.local_hooks() {
+                    if hook.command_is_install() {
+                        if ctx.debug {
+                            eprintln!("Installing hook {} for lockfile", hook.id());
+                        }
+                        config::ensure_installed(&ctx, hook)?;
+                    }
+                }
+                println!("Updated .precommit-lock.yaml with installed hook hashes.");
+            } else if ctx.debug {
+                eprintln!("No .pre-commit.yaml found at {}", cfg_path.display());
+            }
             Ok(())
         }
     }

@@ -116,9 +116,14 @@ precommit-rs install
 
 # Execute all configured hooks manually
 precommit-rs run-config
+
+# Inspect lock file produced during install/run
+cat .precommit-lock.yaml
 ```
 
-External hooks defined in `.pre-commit.yaml` with `command: "{install}"` are installed automatically on first use. Python hooks use `uv venv` to provision a dedicated environment; Node hooks rely on `npm install`, and Rust hooks use `cargo install`.
+External hooks defined in `.pre-commit.yaml` with `command: "{install}"` are installed automatically on first use. Python hooks use `uv venv`, Node hooks rely on `npm install`, Rust hooks use `cargo install`, and Go hooks run `GOBIN=<hook-cache>/bin go install <module>@<version>` (the config must provide a version; set `install.version`).
+
+Each install updates `.precommit-lock.yaml` with the resolved binary paths and SHA-256 digests so that teams can verify they are running identical tooling.
 
 ## Included Hooks (Summary)
 
