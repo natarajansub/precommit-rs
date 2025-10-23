@@ -72,19 +72,19 @@ jobs:
         shell: bash
         run: |
           set -o pipefail || true
-          bins=(trailing-whitespace end-of-file-fixer check-added-large-files check-yaml pretty-format-json)
-          for bin in "${bins[@]}"; do
-            echo "Bundling $bin"
-            cargo bundle --release --bin "$bin" || true
+          packages=(trailing-whitespace end-of-file-fixer check-added-large-files check-yaml pretty-format-json)
+          for pkg in "${packages[@]}"; do
+            echo "Bundling package $pkg"
+            cargo bundle --release -p "$pkg" || true
             if [ "$RUNNER_OS" = "Linux" ]; then
-              echo "Generating RPM for $bin"
-              cargo generate-rpm --bin "$bin" || true
+              echo "Generating RPM for $pkg"
+              cargo generate-rpm --package "$pkg" || true
             fi
           done
           cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
           if [ "$RUNNER_OS" = "Linux" ]; then
             echo "Generating RPM for precommit-rs"
-            cargo generate-rpm --bin precommit-rs 2>&1 | tee -a bundle.log || true
+            cargo generate-rpm --package precommit-rs 2>&1 | tee -a bundle.log || true
           fi
 
 

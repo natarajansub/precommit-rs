@@ -29,7 +29,7 @@ description = "YAML validation hook for precommit-rs."
 [package.metadata.generate-rpm]
 requires = "bash"
 assets = [
-  { source = "target/release/check-yaml", dest = "/usr/bin/check-yaml", mode = "755" }
+  { source = "../../target/release/check-yaml", dest = "/usr/bin/check-yaml", mode = "755" }
 ]
 
 [package.metadata.bundle.windows]

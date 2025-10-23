@@ -29,7 +29,7 @@ description = "End-of-file newline fixer hook for precommit-rs."
 [package.metadata.generate-rpm]
 requires = "bash"
 assets = [
-  { source = "target/release/end-of-file-fixer", dest = "/usr/bin/end-of-file-fixer", mode = "755" }
+  { source = "../../target/release/end-of-file-fixer", dest = "/usr/bin/end-of-file-fixer", mode = "755" }
 ]
 
 [package.metadata.bundle.windows]
