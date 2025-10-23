@@ -76,8 +76,9 @@ jobs:
             echo "Bundling $pkg"
             (cd "$pkg" && cargo bundle --release) || true
             if [ "$RUNNER_OS" = "Linux" ]; then
-              echo "Generating RPM for $pkg"
-              (cd "$pkg" && cargo generate-rpm) || true
+              pkg_name=$(basename "$pkg")
+              echo "Generating RPM for package $pkg_name"
+              cargo generate-rpm -p "$pkg_name" || true
             fi
           done
           cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
