@@ -46,6 +46,14 @@ desktop_file = { name = "precommit-rs", exec = "precommit-rs", icon = "precommit
 maintainer = "nats<you@example.com>"
 description = "A collection of pre-commit hooks implemented in Rust."
 
+[package.metadata.bundle.rpm]
+package_name = "precommit-rs"
+depends = ["bash"]
+license = "MIT"
+summary = "precommit-rs CLI and bundled hooks"
+description = "Pre-commit hook framework and bundled hooks implemented in Rust."
+maintainer = "nats<you@example.com>"
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "precommit-rs-installer"

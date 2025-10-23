@@ -19,6 +19,13 @@ icon = ["../../assets/icon.png"]
 package_type = "appimage"
 desktop_file = { name = "end-of-file-fixer", exec = "end-of-file-fixer", icon = "precommit-rs" }
 
+[package.metadata.bundle.rpm]
+package_name = "end-of-file-fixer"
+depends = ["bash"]
+license = "MIT"
+summary = "End-of-file newline fixer hook"
+description = "End-of-file newline fixer hook for precommit-rs."
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "end-of-file-fixer-installer"

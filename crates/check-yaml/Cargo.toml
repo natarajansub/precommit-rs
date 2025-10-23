@@ -19,6 +19,13 @@ icon = ["../../assets/icon.png"]
 package_type = "appimage"
 desktop_file = { name = "check-yaml", exec = "check-yaml", icon = "precommit-rs" }
 
+[package.metadata.bundle.rpm]
+package_name = "check-yaml"
+depends = ["bash"]
+license = "MIT"
+summary = "YAML validation hook"
+description = "YAML validation hook for precommit-rs."
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "check-yaml-installer"

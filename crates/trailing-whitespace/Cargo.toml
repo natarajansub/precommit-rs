@@ -19,6 +19,13 @@ icon = ["../../assets/icon.png"]
 package_type = "appimage"
 desktop_file = { name = "trailing-whitespace", exec = "trailing-whitespace", icon = "precommit-rs" }
 
+[package.metadata.bundle.rpm]
+package_name = "trailing-whitespace"
+depends = ["bash"]
+license = "MIT"
+summary = "Trailing whitespace fixer hook"
+description = "Trailing whitespace fixer hook for precommit-rs."
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "trailing-whitespace-installer"

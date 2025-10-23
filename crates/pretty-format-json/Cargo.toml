@@ -19,6 +19,13 @@ icon = ["../../assets/icon.png"]
 package_type = "appimage"
 desktop_file = { name = "pretty-format-json", exec = "pretty-format-json", icon = "precommit-rs" }
 
+[package.metadata.bundle.rpm]
+package_name = "pretty-format-json"
+depends = ["bash"]
+license = "MIT"
+summary = "Deterministic JSON formatter hook"
+description = "Deterministic JSON formatter hook for precommit-rs."
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "pretty-format-json-installer"
