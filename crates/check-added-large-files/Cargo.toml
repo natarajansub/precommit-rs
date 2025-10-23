@@ -3,6 +3,8 @@ name = "check-added-large-files"
 version = "0.1.0"
 edition = "2021"
 publish = false
+license = "MIT"
+description = "Large file size check hook for precommit-rs"
 
 [dependencies]
 anyhow = "1.0"

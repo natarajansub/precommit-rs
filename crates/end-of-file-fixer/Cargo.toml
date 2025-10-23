@@ -3,6 +3,8 @@ name = "end-of-file-fixer"
 version = "0.1.0"
 edition = "2021"
 publish = false
+license = "MIT"
+description = "End-of-file newline fixer hook for precommit-rs"
 
 [dependencies]
 anyhow = "1.0"
