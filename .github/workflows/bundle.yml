@@ -87,7 +87,14 @@ jobs:
             (cd "$pkg_dir" && cargo bundle --release) || true
             if [ "$RUNNER_OS" = "Linux" ]; then
               echo "Generating RPM for $pkg"
-              (cd "$pkg_dir" && cargo generate-rpm) || true
+              mkdir -p target/generate-rpm
+              if (cd "$pkg_dir" && cargo generate-rpm); then
+                if [ -d "$pkg_dir/target/generate-rpm" ]; then
+                  find "$pkg_dir/target/generate-rpm" -maxdepth 1 -name "*.rpm" -exec cp -f {} target/generate-rpm/ \;
+                fi
+              else
+                echo "cargo generate-rpm failed for $pkg (see logs above)" >&2
+              fi
             fi
           done
           cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
@@ -340,6 +347,11 @@ jobs:
             "artifacts/ubuntu/target/generate-rpm"
             "target/generate-rpm"
             "artifacts/linux/target/generate-rpm"
+            "crates/trailing-whitespace/target/generate-rpm"
+            "crates/end-of-file-fixer/target/generate-rpm"
+            "crates/check-added-large-files/target/generate-rpm"
+            "crates/check-yaml/target/generate-rpm"
+            "crates/pretty-format-json/target/generate-rpm"
           )
           for dir in "${linux_dirs_rpm[@]}"; do
             collect_artifacts "$dir" "*.rpm" "linux/"
