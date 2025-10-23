@@ -1,4 +1,13 @@
-# Pre-commit Changes 2025-10-23 07:08:50
+# Pre-commit Changes 2025-10-23 07:26:48
+
+## Hook: ruff-check
+
+### Changes:
+- Ran external command: /Users/Nat/Work/precommit-rs/.precommit-tools/ruff-check/venv/bin/ruff
+
+### Checked Files (no changes):
+- `./check-todos/check-todos.py`
+- `./assets/make_png.py`
 
 ## Hook: prettier
 
@@ -11,15 +20,34 @@
 - `./assets/README.md`
 - `./PRECOMMIT_CHANGELOG.md`
 
+
+---
+
+# Pre-commit Changes 2025-10-23 07:08:50
+
+## Hook: prettier
+
+### Changes:
+
+- Ran external command: /Users/Nat/Work/precommit-rs/.precommit-tools/prettier/node_modules/.bin/prettier
+
+### Checked Files (no changes):
+
+- `./RELEASES.md`
+- `./README.md`
+- `./assets/README.md`
+- `./PRECOMMIT_CHANGELOG.md`
+
 ## Hook: ruff-check
 
 ### Changes:
+
 - Ran external command: /Users/Nat/Work/precommit-rs/.precommit-tools/ruff-check/venv/bin/ruff
 
 ### Checked Files (no changes):
+
 - `./check-todos/check-todos.py`
 - `./assets/make_png.py`
-
 
 ---
 
