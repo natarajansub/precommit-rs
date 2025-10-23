@@ -77,13 +77,13 @@ jobs:
             (cd "$pkg" && cargo bundle --release) || true
             if [ "$RUNNER_OS" = "Linux" ]; then
               echo "Generating RPM for $pkg"
-              (cd "$pkg" && cargo generate-rpm --release) || true
+              (cd "$pkg" && cargo generate-rpm) || true
             fi
           done
           cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
           if [ "$RUNNER_OS" = "Linux" ]; then
             echo "Generating RPM for precommit-rs"
-            cargo generate-rpm --release 2>&1 | tee -a bundle.log || true
+            cargo generate-rpm 2>&1 | tee -a bundle.log || true
           fi
 
 
