@@ -26,6 +26,12 @@ license = "MIT"
 summary = "Large file size check hook"
 description = "Large file size check hook for precommit-rs."
 
+[package.metadata.generate-rpm]
+requires = ["bash"]
+assets = [
+  { source = "target/release/check-added-large-files", dest = "/usr/bin/check-added-large-files", mode = "755" }
+]
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "check-added-large-files-installer"

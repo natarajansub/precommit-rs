@@ -64,6 +64,10 @@ jobs:
           mv appimagetool.tar.xz /usr/local/bin/appimagetool
           ls -la /usr/local/bin/appimagetool || true
 
+      - name: Install cargo-generate-rpm (Linux)
+        if: runner.os == 'Linux'
+        run: cargo install cargo-generate-rpm --locked --force
+
       - name: Run cargo-bundle (best-effort)
         shell: bash
         run: |
@@ -72,14 +76,14 @@ jobs:
             echo "Bundling $pkg"
             (cd "$pkg" && cargo bundle --release) || true
             if [ "$RUNNER_OS" = "Linux" ]; then
-              echo "Bundling RPM for $pkg"
-              (cd "$pkg" && cargo bundle --release --format rpm) || true
+              echo "Generating RPM for $pkg"
+              (cd "$pkg" && cargo generate-rpm --release) || true
             fi
           done
           cargo bundle --release --bin precommit-rs 2>&1 | tee bundle.log || true
           if [ "$RUNNER_OS" = "Linux" ]; then
-            echo "Bundling RPM for precommit-rs"
-            cargo bundle --release --bin precommit-rs --format rpm 2>&1 | tee -a bundle.log || true
+            echo "Generating RPM for precommit-rs"
+            cargo generate-rpm --release 2>&1 | tee -a bundle.log || true
           fi
 
 
@@ -115,6 +119,7 @@ jobs:
           name: precommit-rs-bundles-${{ matrix.os }}
           path: |
             target/release/bundle
+            target/generate-rpm
             dist
             target/release/*.dmg
             target/release/*.AppImage
@@ -322,6 +327,9 @@ jobs:
             "artifacts/ubuntu/target/release/bundle/rpm"
             "target/release/bundle/rpm"
             "artifacts/linux/target/release/bundle/rpm"
+            "artifacts/ubuntu/target/generate-rpm"
+            "target/generate-rpm"
+            "artifacts/linux/target/generate-rpm"
           )
           for dir in "${linux_dirs_rpm[@]}"; do
             collect_artifacts "$dir" "*.rpm" "linux/"

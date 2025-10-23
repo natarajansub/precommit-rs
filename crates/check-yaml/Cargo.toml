@@ -26,6 +26,12 @@ license = "MIT"
 summary = "YAML validation hook"
 description = "YAML validation hook for precommit-rs."
 
+[package.metadata.generate-rpm]
+requires = ["bash"]
+assets = [
+  { source = "target/release/check-yaml", dest = "/usr/bin/check-yaml", mode = "755" }
+]
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "check-yaml-installer"

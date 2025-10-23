@@ -54,6 +54,12 @@ summary = "precommit-rs CLI and bundled hooks"
 description = "Pre-commit hook framework and bundled hooks implemented in Rust."
 maintainer = "nats<you@example.com>"
 
+[package.metadata.generate-rpm]
+requires = ["bash"]
+assets = [
+  { source = "target/release/precommit-rs", dest = "/usr/bin/precommit-rs", mode = "755" }
+]
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "precommit-rs-installer"

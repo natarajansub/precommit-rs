@@ -26,6 +26,12 @@ license = "MIT"
 summary = "Deterministic JSON formatter hook"
 description = "Deterministic JSON formatter hook for precommit-rs."
 
+[package.metadata.generate-rpm]
+requires = ["bash"]
+assets = [
+  { source = "target/release/pretty-format-json", dest = "/usr/bin/pretty-format-json", mode = "755" }
+]
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "pretty-format-json-installer"

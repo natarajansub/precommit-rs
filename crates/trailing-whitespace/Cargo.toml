@@ -26,6 +26,12 @@ license = "MIT"
 summary = "Trailing whitespace fixer hook"
 description = "Trailing whitespace fixer hook for precommit-rs."
 
+[package.metadata.generate-rpm]
+requires = ["bash"]
+assets = [
+  { source = "target/release/trailing-whitespace", dest = "/usr/bin/trailing-whitespace", mode = "755" }
+]
+
 [package.metadata.bundle.windows]
 package_type = "nsis"
 installer_name = "trailing-whitespace-installer"
